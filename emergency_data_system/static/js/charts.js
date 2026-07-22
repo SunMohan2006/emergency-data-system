@@ -1,13 +1,56 @@
 /**
- * 应急数据清洗与可视化系统 - 前端交互逻辑
- * 包含：文件上传、数据清洗、ECharts渲染、日志展示、文件下载
+ * ============================================================================
+ *  应急数据清洗与可视化系统 - 前端交互逻辑
+ * ============================================================================
+ *
+ *  本文件负责系统的全部前端交互，包括以下功能模块：
+ *
+ *  模块1: 文件上传
+ *    - 点击上传（<input type="file">）
+ *    - 拖拽上传（Drag & Drop API）
+ *    - 格式校验（仅 .xlsx）
+ *    - 文件选择状态管理
+ *
+ *  模块2: 数据清洗交互
+ *    - 异步上传（Fetch API + FormData）
+ *    - 进度反馈（CSS 动画进度条）
+ *    - 结果渲染（统计卡片 + 图表 + 日志表格）
+ *    - 错误处理（网络异常 / 服务端错误）
+ *
+ *  模块3: ECharts 可视化
+ *    - 清洗总览柱状图（原始/有效/剔除/异常 四维对比）
+ *    - 异常类型饼图（各类异常占比分布）
+ *    - 月度趋势折线图（基于历史数据库统计）
+ *    - 图表自适应（窗口 resize 时自动重绘）
+ *
+ *  模块4: 历史数据看板
+ *    - 全局统计摘要（累计记录数 / 异常率 / 批次数）
+ *    - 月度趋势数据（从 /api/monthly 获取）
+ *    - 页面初始化时自动加载
+ *
+ *  模块5: 文件下载
+ *    - 清洗后报表下载
+ *    - 异常日志下载
+ *    - 增强完整报表下载
+ *
+ *  设计原则:
+ *    - 零外部依赖：仅依赖 ECharts（CDN 加载），无 jQuery / Vue / React
+ *    - 渐进增强：历史看板加载失败不影响核心的上传清洗功能
+ *    - 无障碍：所有操作提供 toast 消息反馈
+ * ============================================================================
  */
 
 // ==================== 全局状态 ====================
 let currentResult = null;
 let selectedFile = null;
 
-// ==================== 文件选择 ====================
+// ==================== 模块1: 文件选择与拖拽 ====================
+
+/**
+ * 处理文件选择事件（点击上传）
+ * 验证文件扩展名，更新 UI 状态，启用清洗按钮
+ * @param {Event} event - 文件 input 的 change 事件
+ */
 function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -20,7 +63,9 @@ function handleFileSelect(event) {
     document.getElementById('btnUpload').disabled = false;
 }
 
-// ==================== 拖拽上传 ====================
+// ==================== 拖拽上传（Drag & Drop API） ====================
+// 监听上传区域的 dragover / dragleave / drop 三个事件
+// dragover 时添加视觉反馈（边框变色），drop 时提取文件并触发同点击上传的逻辑
 const uploadZone = document.getElementById('uploadZone');
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
 uploadZone.addEventListener('dragleave', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); });
@@ -38,7 +83,9 @@ uploadZone.addEventListener('drop', e => {
     document.getElementById('btnUpload').disabled = false;
 });
 
-// ==================== 提示消息 ====================
+// ==================== Toast 提示消息 ====================
+// 页面顶部固定定位的提示条，4秒后自动消失
+// type='success' → 绿色背景，type='error' → 红色背景
 function showToast(msg, type) {
     const toast = document.getElementById('toast');
     toast.textContent = msg;

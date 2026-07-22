@@ -1,6 +1,40 @@
 """
-应急数据智能清洗引擎
-基于 Pandas 定制清洗规则，覆盖字段标准化、格式校验、去重填充、异常日志全流程
+================================================================================
+  应急数据智能清洗引擎
+================================================================================
+  本模块是系统的核心业务逻辑层，基于 Pandas 与 openpyxl 实现完整的
+  Excel 数据清洗流水线。
+
+  架构设计:
+    本模块与 Web 服务层（app.py）完全解耦，可三种方式运行：
+      1. 作为 Flask 后端引擎：  from data_cleaner import clean_data
+      2. 作为命令行工具：        python data_cleaner.py test.xlsx
+      3. 作为 Python 库调用：    clean_data("/path/to/file.xlsx")
+
+  清洗流水线（按执行顺序）:
+    步骤1  读取Excel    → load_excel()          支持 .xlsx，自动剔除全空行列
+    步骤2  列名标准化   → standardize_columns()  20+种字段变体 → 5类标准字段
+    步骤3  日期规范化   → normalize_date()       6种格式 → YYYY-MM-DD
+    步骤4  号码校验     → clean_phone()          手机/固话/国家码校验
+    步骤5  名称规整     → clean_company_name()   去空格/统一括号/空值标记
+    步骤6  地址补全     → complete_address()     地域前缀自动补全
+    步骤7  去重+填充    → deduplicate_and_fill() 按维度去重+统一填充
+    步骤8  异常日志     → collect_anomaly_logs() 4类异常检测+日志生成
+    步骤9  保存结果     → 清洗后Excel + 异常日志Excel + 橙色字体标注
+
+  异常类型（共4种，记录到异常日志中）:
+    1. 必填字段缺失   —— 企业名称/联系电话/排查日期为空
+    2. 联系方式格式错误 —— 手机号/固话格式不合法
+    3. 企业名称缺失   —— 企业名称为空或无效占位符("无"/"暂无")
+    4. 日期格式无法识别 —— 日期字符串无法解析，已填充为默认日期
+
+  设计决策:
+    - 所有值以字符串类型读入（dtype=str），避免 Pandas 隐式类型转换
+      导致前导零丢失（如 010-88886666 → 1088886666）
+    - 清洗规则全配置化（config.py），新增规则无需改代码
+    - 辅助列机制（_phone_valid / _date_anomaly）追踪中间判断，
+      输出前自动剥离，确保报表干净
+================================================================================
 """
 
 import re
@@ -111,33 +145,41 @@ def normalize_date(value: Any, default_date: str = None) -> str:
     返回:
         标准化后的日期字符串 YYYY-MM-DD
     """
+    # 默认日期：如果调用方未指定，使用当天日期
     if default_date is None:
         default_date = datetime.now().strftime('%Y-%m-%d')
 
+    # 空值检测：NaN / None / 空字符串 / 字符串'nan' → 返回默认日期
     if pd.isna(value) or str(value).strip() == '' or str(value).strip() in ('nan', 'NaN', 'None', ''):
         return default_date
 
     date_str = str(value).strip()
 
-    # 清理常见分隔符，统一为 -
-    # 先处理中文格式：2024年1月5日
+    # ---- 解析策略：逐级匹配，命中即返回 ----
+    # 设计理由：不依赖 pd.to_datetime() 的隐式推断（其行为在不同 Pandas
+    #          版本间不一致），而是使用显式的正则匹配，结果可预测。
+
+    # 策略1: 中文格式 → "2024年1月5日" 或 "2024年01月05日"
+    # 正则说明：4位年份 + "年" + 1-2位月份 + "月" + 1-2位日期 + 可选的"日"
     chinese_match = re.match(r'(\d{4})年(\d{1,2})月(\d{1,2})日?', date_str)
     if chinese_match:
         y, m, d = chinese_match.groups()
         return f'{int(y):04d}-{int(m):02d}-{int(d):02d}'
 
-    # 替换 . / 为 -
+    # 统一分隔符：将 "." 和 "/" 替换为 "-"，便于后续统一处理
     date_str_clean = re.sub(r'[./]', '-', date_str)
 
-    # 纯数字 20240105
+    # 策略2: 纯8位数字 → "20240105"（基层模板中常见的无分隔符格式）
     if date_str_clean.isdigit() and len(date_str_clean) == 8:
         y, m, d = date_str_clean[:4], date_str_clean[4:6], date_str_clean[6:8]
         return f'{int(y):04d}-{int(m):02d}-{int(d):02d}'
 
-    # 尝试解析标准格式
+    # 策略3: 标准分隔格式 → "2024-1-5" 或 "1-5-2024"（美式）
+    # 依次尝试两种正则模式，命中后验证日期合法性
     patterns = [
+        # (正则, 模式)  mode=None → 年-月-日; mode='md' → 月-日-年
         (r'^(\d{4})-(\d{1,2})-(\d{1,2})$', None),   # 2024-1-5
-        (r'^(\d{1,2})-(\d{1,2})-(\d{4})$', 'md'),    # 1-5-2024
+        (r'^(\d{1,2})-(\d{1,2})-(\d{4})$', 'md'),    # 1-5-2024（美式）
     ]
 
     for pattern, mode in patterns:
@@ -145,19 +187,23 @@ def normalize_date(value: Any, default_date: str = None) -> str:
         if match:
             g = match.groups()
             if mode == 'md':
-                m, d, y = g
+                m, d, y = g  # 美式：月/日/年
             else:
-                y, m, d = g
+                y, m, d = g  # 标准：年/月/日
             try:
                 y, m, d = int(y), int(m), int(d)
+                # 合理范围校验：年2000-2100，月1-12，日1-31
                 if 2000 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31:
-                    # 验证日期合法性
+                    # 进一步验证日期合法性（排除 2月30日 等非法日期）
+                    # datetime() 对非法日期会抛出 ValueError
                     datetime(y, m, d)
                     return f'{y:04d}-{m:02d}-{d:02d}'
             except (ValueError, OverflowError):
+                # 日期不合法（如 2024-02-30），继续尝试下一个模式
                 pass
 
-    # 所有规则都不匹配，返回默认日期
+    # 所有解析策略均失败 → 返回默认日期
+    # 注意：此情况会被 normalize_dates_in_df 中的 _date_anomaly 标记捕获
     return default_date
 
 
@@ -220,26 +266,31 @@ def clean_phone(phone: Any) -> Tuple[str, bool, str]:
 
     raw = str(phone).strip()
 
-    # 清除无效字符，保留数字和 +
+    # 清除无效字符：空格、横线（中英文）、括号（中英文）、点号
+    # 保留数字和 '+'（用于国际号码前缀 +86）
     cleaned = re.sub(r'[\s\-\(\)（）\-\.]', '', raw)
 
-    # 空号码
+    # 清洗后为空 → 原始值全是无效字符
     if not cleaned:
         return (FILL_VALUE, False, '联系电话为空')
 
-    # 手机号校验：11位，以1开头
+    # 校验策略（按优先级依次尝试）:
+
+    # 策略1: 中国大陆手机号 —— 11位，以1开头，第二位为3-9
     if re.match(r'^1[3-9]\d{9}$', cleaned):
         return (cleaned, True, '')
 
-    # 固话校验：区号(3-4位) + 号码(7-8位)
+    # 策略2: 固话（含区号） —— 0开头 + 3-4位区号 + 7-8位号码
+    # 示例: 01088886666 (北京10位), 075588886666 (深圳11位)
     if re.match(r'^0\d{2,3}\d{7,8}$', cleaned):
         return (cleaned, True, '')
 
-    # 带国家码 +86
+    # 策略3: 带国家码的手机号 —— +86 开头
+    # 去除 +86 前缀，保留后11位作为标准手机号
     if re.match(r'^\+86\d{11}$', cleaned):
         return (cleaned[3:], True, '')
 
-    # 不合法
+    # 所有策略失败 → 标记为异常，保留原始值供人工复核
     return (raw, False, f'联系电话格式不正确: {raw}')
 
 
@@ -511,43 +562,68 @@ def save_anomaly_logs(logs: List[Dict], file_path: str = None) -> str:
 
 def clean_data(file_path: str) -> Dict[str, Any]:
     """
-    一键智能清洗入口函数
+    一键智能清洗入口函数 —— 系统核心流水线
 
-    完整执行流程：
-        3.1 读取 Excel     → df
-        3.2 列名标准化      → df
-        3.3 日期规范化      → df
-        3.4 号码校验       → df（附加 _phone_valid / _phone_error 辅助列）
-        3.5 名称规整       → df
-        3.6 地址补全       → df
-        3.6 去重 + 填充    → df, removed_count
-        3.6 异常日志收集   → logs
-        保存清洗结果       → output_path
-        保存异常日志       → log_path
+    本函数编排了完整的 9 步清洗流水线，每一步独立封装、顺序调用。
+    流水线设计允许在任意步骤之间插入新的处理逻辑，而无需重构。
+
+    完整执行流程（9步）:
+        ┌──────────────────────────────────────────────────┐
+        │ 步骤1  读取 Excel     → df                        │
+        │ 步骤2  列名标准化      → df（统一5类字段命名）        │
+        │ 步骤3  日期规范化      → df（6种格式→YYYY-MM-DD）    │
+        │ 步骤4  号码校验       → df（+_phone_valid辅助列）   │
+        │ 步骤5  名称规整       → df（去空格+统一括号+空值标记）│
+        │ 步骤6  地址补全       → df（地域前缀自动拼接）        │
+        │ 步骤7  去重 + 填充    → df（按维度去重+空白统一填充）  │
+        │ 步骤8  异常日志收集   → logs（4类异常检测）          │
+        │ 步骤9  保存结果       → Excel + 异常日志 + 橙色标注  │
+        └──────────────────────────────────────────────────┘
+
+    辅助列机制:
+        步骤4 在 DataFrame 中增加 _phone_valid（布尔）和 _phone_error（字符串）
+        步骤3 在 DataFrame 中增加 _date_anomaly（布尔）和 _date_original（字符串）
+        这些辅助列在步骤9保存前统一剔除，确保输出报表干净无污染
+
+    错误处理:
+        - 文件不存在 / 空文件 / 格式不支持 → 抛出 ValueError
+        - 清洗过程中某步失败 → 异常向上传播，由调用方（app.py）捕获并返回500
+        - 日期解析失败 → 静默降级为默认日期，通过辅助列标记，不阻断流水线
 
     参数:
-        file_path: 原始 Excel 文件路径
+        file_path: str —— 原始 Excel 文件的绝对或相对路径
 
     返回:
-        包含统计信息的字典:
-        {
-            'original_count': 原始数据条数,
-            'valid_count': 有效数据条数,
-            'removed_dup_count': 剔除重复条数,
-            'anomaly_count': 异常数据条数,
-            'output_path': 清洗后文件路径,
-            'log_path': 异常日志文件路径,
-            'columns': 清洗后的列名列表,
-        }
+        Dict[str, Any]:
+            original_count      int    原始数据总条数
+            valid_count         int    去重后的有效数据条数
+            removed_dup_count   int    被剔除的重复数据条数
+            anomaly_count       int    包含异常的数据行数（去重计数）
+            output_path         str    清洗后 Excel 文件的绝对路径
+            log_path            str    异常日志 Excel 文件的绝对路径
+            columns             list   清洗后的标准列名列表
+            anomaly_logs        list   异常日志明细（用于前端展示和数据库存储）
     """
-    # ---- 3.1 读取 ----
+    # ================================================================
+    #  步骤1: 读取 Excel 文件
+    # ================================================================
+    #  load_excel 以 dtype=str 读入所有数据，防止电话号码前导零丢失
+    #  全空行和全空列自动剔除
     df = load_excel(file_path)
-    original_count = len(df)
+    original_count = len(df)  # 记录原始条数（用于统计和有效率计算）
 
-    # ---- 3.2 列名标准化 ----
+    # ================================================================
+    #  步骤2: 字段列名标准化
+    # ================================================================
+    #  将各基层单位上报的不同列名（企业/公司/手机/电话...）统一映射为
+    #  5 个标准字段名：企业名称、联系电话、排查日期、企业地址、排查类型
     df = standardize_columns(df)
 
-    # ---- 3.3 日期规范化 ----
+    # ================================================================
+    #  步骤3: 日期格式规范化
+    # ================================================================
+    #  寻找日期列：优先匹配"排查日期"，其次匹配含"日期"的任意列名
+    #  如果都没有，跳过日期处理（如完全不相关的Excel文件）
     if '排查日期' in df.columns or any('日期' in c for c in df.columns):
         date_col = '排查日期' if '排查日期' in df.columns else None
         if date_col is None:
@@ -555,19 +631,27 @@ def clean_data(file_path: str) -> Dict[str, Any]:
                 if '日期' in c:
                     date_col = c
                     break
+        # normalize_dates_in_df 返回带 _date_anomaly 和 _date_original 的 DataFrame
         df = normalize_dates_in_df(df, date_col or '排查日期')
 
-    # ---- 3.4 号码校验 ----
+    # ================================================================
+    #  步骤4: 联系电话智能校验
+    # ================================================================
+    #  仅当存在"联系电话"列时执行；clean_phones_in_df 返回带 _phone_valid
+    #  和 _phone_error 辅助列的 DataFrame
     if '联系电话' in df.columns:
         df = clean_phones_in_df(df, '联系电话')
 
-    # ---- 3.5 企业名称规整 ----
+    # ================================================================
+    #  步骤5: 企业名称规整
+    # ================================================================
+    #  优先处理已命名为"企业名称"的列
+    #  如果不存在，智能搜索含"名称""企业""公司""单位"的列并重命名
     if '企业名称' in df.columns:
         name_results = df['企业名称'].apply(clean_company_name)
         df['企业名称'] = name_results.apply(lambda r: r[0])
-        # 名称无效的也标记在日志中
     else:
-        # 尝试找到名称相关的列
+        # 智能匹配：在列名中搜索关键词
         name_col = None
         for c in df.columns:
             if '名称' in c or '企业' in c or '公司' in c or '单位' in c:
@@ -577,17 +661,29 @@ def clean_data(file_path: str) -> Dict[str, Any]:
             df = df.rename(columns={name_col: '企业名称'})
             df['企业名称'] = df['企业名称'].apply(lambda n: clean_company_name(n)[0])
 
-    # ---- 3.6 地址补全 ----
+    # ================================================================
+    #  步骤6: 地址自适应补全
+    # ================================================================
+    #  仅当存在"企业地址"列且 REGION_PREFIX 配置了前缀时生效
     if '企业地址' in df.columns:
         df = complete_addresses_in_df(df, '企业地址')
 
-    # ---- 3.6 去重 + 填充 ----
+    # ================================================================
+    #  步骤7: 数据去重 + 缺失值填充
+    # ================================================================
+    #  去重维度：企业名称 + 排查日期（在 config.py 的 DEDUP_KEYS 中配置）
+    #  填充策略：NaN / None / '' → FILL_VALUE（默认"待补充"）
+    #  removed_count 记录被剔除的重复行数，用于统计展示
     df, removed_count = deduplicate_and_fill(df)
 
-    # ---- 3.6 异常日志 ----
+    # ================================================================
+    #  步骤8: 异常日志收集
+    # ================================================================
+    #  检测 4 类异常：必填字段缺失 / 联系方式格式错误 / 企业名称缺失 / 日期无法识别
+    #  每条异常包含：行号、字段名、原始值、异常类型、处理方式
     logs = collect_anomaly_logs(df)
 
-    # 计算异常条数（去重：同一行号只算一条）
+    # 计算异常条数（按行号去重：同一行有多个异常字段时只计 1 条）
     anomaly_rows = set(log['行号'] for log in logs)
     anomaly_count = len(anomaly_rows)
 

@@ -1,18 +1,55 @@
 """
-用户认证模块
-基于 Flask session + werkzeug 密码哈希，提供登录/注册/登出/会话管理
+================================================================================
+  用户认证与权限管理模块
+================================================================================
+  基于 Flask session + werkzeug.security 实现轻量化认证体系。
 
-设计原则：
-    1. 零外部依赖 —— 仅使用 Flask 内置 session 和 werkzeug.security
-    2. 安全基线 —— 密码哈希存储（SHA256 + salt），杜绝明文
-    3. 最小权限 —— 默认两个角色：admin（管理员）和 operator（操作员）
-    4. 无状态会话 —— 基于 Flask signed cookie，无需 Redis/数据库存储会话
+  架构决策:
+    1. 零外部依赖
+       —— 仅使用 Flask 内置的 session 和 werkzeug.security
+       —— 不依赖 Flask-Login / Flask-Security 等第三方扩展
+       —— 理由：减少依赖链，降低安全审计复杂度
 
-使用方式：
+    2. 安全基线
+       —— 密码使用 werkzeug.security.generate_password_hash() 哈希存储
+       —— 底层算法：scrypt（werkzeug 3.x 默认），加盐自动处理
+       —— Session 使用 Flask 签名 cookie，密钥可通过环境变量覆盖
+
+    3. 用户存储
+       —— 默认使用本地 JSON 文件（users.json），无需数据库依赖
+       —— 结构化存储，每个用户包含 username / password_hash / role / display_name
+       —— 默认管理员账户 admin/admin123（首次登录后建议修改密码）
+
+    4. 双角色体系
+       —— admin（管理员）：可创建用户、查看用户列表、清理数据
+       —— operator（操作员）：可执行数据清洗和查看操作
+
+    5. 防御措施
+       —— 登录失败返回通用错误信息（不区分"用户不存在"和"密码错误"），
+          防止用户名枚举攻击
+       —— Session 标记 permanent=True，浏览器关闭后保持登录状态
+       —— 注册接口受角色保护（仅管理员可创建新用户）
+
+  路由清单:
+    POST /auth/login     —— 登录（公开）
+    POST /auth/register  —— 注册（需管理员）
+    POST /auth/logout    —— 登出（需登录）
+    GET  /auth/status    —— 查询当前登录状态（公开）
+    GET  /auth/users     —— 列出所有用户（需管理员）
+
+  装饰器:
+    @login_required      —— 保护路由：未登录返回 401
+    @role_required(role) —— 保护路由：角色不符返回 403
+
+  使用方式:
     from auth import init_auth, login_required, role_required
-    init_auth(app)                  # 注册认证模块
-    @login_required                 # 保护路由：需要登录
-    @role_required('admin')         # 保护路由：需要管理员角色
+    init_auth(app)                  # 在 create_app() 中调用一次
+    @app.route('/admin')
+    @login_required
+    @role_required('admin')
+    def admin_panel():
+        return "管理员面板"
+================================================================================
 """
 
 import os

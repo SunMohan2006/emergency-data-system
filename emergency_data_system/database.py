@@ -1,17 +1,45 @@
 """
-数据库持久化模块
-基于 SQLAlchemy ORM，默认使用 SQLite（零配置），预留 MySQL 切换接口
+================================================================================
+  数据库持久化模块
+================================================================================
+  基于 SQLAlchemy ORM 实现数据持久化，默认使用 SQLite（零配置、零运维），
+  预留 MySQL / PostgreSQL 切换接口，通过环境变量 DATABASE_URL 一键切换。
 
-设计原则：
-    1. 模型与业务逻辑分离 —— 仅定义数据结构，不包含清洗规则
-    2. 支持 SQLite（开发/演示）与 MySQL（生产）一键切换
-    3. 所有操作封装为静态方法，无需实例化即可调用
+  架构决策:
+    1. 模型-业务分离
+       —— 此模块仅定义数据模型与 CRUD 操作，不包含任何清洗规则或业务逻辑
+       —— 清洗逻辑完全在 data_cleaner.py 中，数据库仅负责存储和检索
 
-使用方式：
+    2. 双模数据库支持
+       —— 默认 SQLite（sqlite:///emergency_data.db），零配置即可运行
+       —— 生产切换 MySQL：export DATABASE_URL=mysql+pymysql://user:pass@host/db
+       —— 生产切换 PostgreSQL：export DATABASE_URL=postgresql://user:pass@host/db
+
+    3. 静态方法设计
+       —— 所有 CRUD 操作封装为 @staticmethod，无需实例化即可调用
+       —— 每次操作自动获取和释放 session，避免连接泄漏
+
+    4. 软删除策略
+       —— delete_by_batch() 为物理删除，适合合规清理场景
+       —— 未来可扩展为软删除（添加 is_deleted 字段）
+
+  数据模型（2张表）:
+    CleanRecord   —— 清洗后的有效数据记录（核心表）
+    AnomalyRecord —— 清洗过程中检测到的异常日志（关联表）
+
+  表关系:
+    CleanRecord.batch_id ←→ AnomalyRecord.batch_id（1:N）
+    一个清洗批次可对应多条正常记录 + 多条异常日志
+
+  使用方式:
     from database import init_db, CleanRecord, AnomalyRecord
-    init_db()                          # 首次运行创建表
-    CleanRecord.save_batch(records)    # 批量保存清洗记录
-    CleanRecord.query_all()            # 查询全部记录
+
+    init_db()                          # 应用启动时调用一次，自动建表
+    CleanRecord.save_batch(records)    # 批量保存清洗结果
+    CleanRecord.query_all()            # 查询最近500条记录
+    CleanRecord.get_stats()            # 获取全局统计概览
+    CleanRecord.get_monthly_stats()    # 获取月度趋势数据
+================================================================================
 """
 
 import os

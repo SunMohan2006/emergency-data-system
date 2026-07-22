@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>应急数据清洗与可视化系统</title>
+    <!-- 样式表 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="header">
+    <span class="logo">&#128737;</span>
+    <div>
+        <h1>应急数据清洗与可视化系统</h1>
+        <div class="subtitle">应急管理局 · 安全生产数据治理平台</div>
+    </div>
+</div>
+
+<!-- 提示条 -->
+<div id="toast" class="toast" onclick="this.className='toast'"></div>
+
+<div class="container">
+
+    <!-- ===== 上传卡片 ===== -->
+    <div class="card">
+        <div class="card-title"><span class="icon">&#128196;</span> 数据上传与清洗</div>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">&#128229;</div>
+            <div class="upload-text">点击上传 Excel 文件 或拖拽文件到此处</div>
+            <div class="upload-hint">支持 .xlsx 格式，最大 10MB</div>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx" onchange="handleFileSelect(event)">
+        <div class="file-name" id="fileName"></div>
+        <div class="progress-bar" id="progressBar"><div class="fill"></div></div>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="btnUpload" disabled onclick="uploadAndClean()">
+                &#9881; 一键智能清洗
+            </button>
+            <button class="btn btn-outline" id="btnDownloadClean" disabled onclick="downloadFile('output')">
+                &#128190; 下载清洗后报表
+            </button>
+            <button class="btn btn-outline" id="btnDownloadLog" disabled onclick="downloadFile('log')">
+                &#128214; 下载异常日志
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== 统计卡片 ===== -->
+    <div class="stats-grid" id="statsGrid" style="display:none;">
+        <div class="stat-card total">
+            <div class="stat-num" id="statOriginal">0</div>
+            <div class="stat-label">原始数据条数</div>
+        </div>
+        <div class="stat-card valid">
+            <div class="stat-num" id="statValid">0</div>
+            <div class="stat-label">有效数据条数</div>
+        </div>
+        <div class="stat-card dup">
+            <div class="stat-num" id="statDup">0</div>
+            <div class="stat-label">剔除重复条数</div>
+        </div>
+        <div class="stat-card anomaly">
+            <div class="stat-num" id="statAnomaly">0</div>
+            <div class="stat-label">异常数据条数</div>
+        </div>
+    </div>
+
+    <!-- ===== 图表区 ===== -->
+    <div class="charts-grid" id="chartsGrid" style="display:none;">
+        <div class="chart-box">
+            <div class="chart-title">&#128200; 数据清洗总览</div>
+            <div class="chart-body" id="chartOverview"></div>
+        </div>
+        <div class="chart-box">
+            <div class="chart-title">&#128202; 异常类型分布</div>
+            <div class="chart-body" id="chartAnomaly"></div>
+        </div>
+    </div>
+
+    <!-- ===== 异常日志 ===== -->
+    <div class="card" id="logCard" style="display:none;">
+        <div class="card-title"><span class="icon">&#128221;</span> 异常数据日志 <span id="logCount" style="font-weight:400;color:#888;font-size:13px;"></span></div>
+        <div class="log-table-wrap">
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Excel行号</th>
+                        <th>异常字段</th>
+                        <th>原始值</th>
+                        <th>异常类型</th>
+                        <th>处理方式</th>
+                    </tr>
+                </thead>
+                <tbody id="logTableBody">
+                    <tr><td colspan="5" style="text-align:center;color:#999;">暂无异常数据</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- 前端交互逻辑 -->
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+
+</body>
+</html>

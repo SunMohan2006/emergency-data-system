@@ -46,6 +46,9 @@
             <button class="btn btn-outline" id="btnDownloadLog" disabled onclick="downloadFile('log')">
                 &#128214; 下载异常日志
             </button>
+            <button class="btn btn-success" id="btnDownloadEnhanced" disabled onclick="downloadFile('enhanced')">
+                &#128203; 下载完整报表
+            </button>
         </div>
     </div>
 
@@ -79,6 +82,31 @@
             <div class="chart-title">&#128202; 异常类型分布</div>
             <div class="chart-body" id="chartAnomaly"></div>
         </div>
+    </div>
+
+    <!-- ===== 历史数据看板 ===== -->
+    <div class="card" id="historySummary" style="display:none;">
+        <div class="card-title"><span class="icon">&#128202;</span> 全局数据概览</div>
+        <div class="stats-grid" style="margin-bottom:0;">
+            <div class="stat-card total">
+                <div class="stat-num" id="histTotalRecords">0</div>
+                <div class="stat-label">累计处理记录</div>
+            </div>
+            <div class="stat-card anomaly">
+                <div class="stat-num" id="histAnomalyRate">0%</div>
+                <div class="stat-label">整体异常率</div>
+            </div>
+            <div class="stat-card valid">
+                <div class="stat-num" id="histBatches">0</div>
+                <div class="stat-label">历史批次数</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 月度趋势 ===== -->
+    <div class="card" id="monthlySection" style="display:none;">
+        <div class="card-title"><span class="icon">&#128200;</span> 月度数据趋势</div>
+        <div class="chart-body" id="chartMonthly" style="height:300px;"></div>
     </div>
 
     <!-- ===== 异常日志 ===== -->

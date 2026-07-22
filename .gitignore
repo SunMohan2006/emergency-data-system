@@ -17,6 +17,10 @@ emergency_data_system/logs/*
 !emergency_data_system/outputs/.gitkeep
 !emergency_data_system/logs/.gitkeep
 
+# 运行时数据
+emergency_data_system/emergency_data.db
+emergency_data_system/users.json
+
 # 临时测试文件
 emergency_data_system/_test_*.xlsx
 emergency_data_system/_verify_font.py

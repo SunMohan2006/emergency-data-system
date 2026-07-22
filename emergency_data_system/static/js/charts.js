@@ -103,8 +103,10 @@ function renderAll(data) {
     // 启用下载按钮
     document.getElementById('btnDownloadClean').disabled = false;
     document.getElementById('btnDownloadLog').disabled = false;
+    document.getElementById('btnDownloadEnhanced').disabled = false;
     document.getElementById('btnDownloadClean').onclick = () => downloadFile('output');
     document.getElementById('btnDownloadLog').onclick = () => downloadFile('log');
+    document.getElementById('btnDownloadEnhanced').onclick = () => downloadFile('enhanced');
 }
 
 // ==================== 数字动画 ====================
@@ -251,11 +253,149 @@ function renderLogTable(logs) {
     `}).join('');
 }
 
+// ==================== 历史数据看板 ====================
+
+/**
+ * 加载全局统计数据并渲染历史概览
+ * 在页面加载完成后调用，展示所有历史批次的汇总信息
+ */
+async function loadHistoryDashboard() {
+    try {
+        const [statsResp, monthlyResp] = await Promise.all([
+            fetch('/api/stats').then(r => r.json()),
+            fetch('/api/monthly').then(r => r.json()),
+        ]);
+
+        if (statsResp.success && statsResp.data.total_records > 0) {
+            renderStatsSummary(statsResp.data);
+            if (monthlyResp.success && monthlyResp.data.length > 0) {
+                renderMonthlyTrend(monthlyResp.data);
+            }
+        }
+    } catch (err) {
+        // 历史看板加载失败不影响主功能
+        console.log('历史看板: 暂无数据');
+    }
+}
+
+/**
+ * 渲染全局统计摘要（累计处理量 + 异常率）
+ * 插入页面底部的总结区域
+ */
+function renderStatsSummary(stats) {
+    const container = document.getElementById('historySummary');
+    if (!container) return;
+
+    container.style.display = 'block';
+    document.getElementById('histTotalRecords').textContent = stats.total_records || 0;
+    document.getElementById('histAnomalyRate').textContent = stats.anomaly_rate || '0%';
+    document.getElementById('histBatches').textContent = stats.total_batches || 0;
+}
+
+/**
+ * 渲染月度趋势折线图
+ * 展示各月份数据上报量的变化趋势
+ */
+function renderMonthlyTrend(monthlyData) {
+    const dom = document.getElementById('chartMonthly');
+    if (!dom) return;
+
+    // 确保父容器可见
+    const monthlySection = document.getElementById('monthlySection');
+    if (monthlySection) monthlySection.style.display = 'block';
+
+    if (window._monthlyChart) window._monthlyChart.dispose();
+    const chart = echarts.init(dom);
+    window._monthlyChart = chart;
+
+    const months = monthlyData.map(d => d.month);
+    const counts = monthlyData.map(d => d.count);
+
+    chart.setOption({
+        title: {
+            text: '累计 ' + counts.reduce((a, b) => a + b, 0) + ' 条',
+            textStyle: { fontSize: 12, color: '#888' },
+            left: 'center',
+            top: 5,
+        },
+        tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+                const p = params[0];
+                return p.axisValue + '<br/>清洗数据量: ' + p.value + ' 条';
+            }
+        },
+        grid: { left: 50, right: 30, top: 35, bottom: 30 },
+        xAxis: {
+            type: 'category',
+            data: months,
+            axisLabel: { fontSize: 11, rotate: 30 },
+            boundaryGap: false,
+        },
+        yAxis: {
+            type: 'value',
+            minInterval: 1,
+            axisLabel: { fontSize: 11 },
+        },
+        series: [{
+            name: '数据量',
+            type: 'line',
+            data: counts,
+            smooth: true,
+            lineStyle: { color: '#2d6aa0', width: 2 },
+            itemStyle: { color: '#2d6aa0' },
+            areaStyle: {
+                color: {
+                    type: 'linear',
+                    x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: 'rgba(45,106,160,0.3)' },
+                        { offset: 1, color: 'rgba(45,106,160,0.05)' },
+                    ],
+                },
+            },
+            markLine: {
+                silent: true,
+                data: [{
+                    type: 'average',
+                    name: '月均',
+                    lineStyle: { color: '#e74c3c', type: 'dashed' },
+                }],
+            },
+        }],
+    });
+
+    window.addEventListener('resize', () => chart.resize());
+}
+
 // ==================== 文件下载 ====================
+
+/**
+ * 触发文件下载
+ * @param {string} type - 'output' 下载清洗数据, 'log' 下载异常日志, 'enhanced' 下载完整报表
+ */
 function downloadFile(type) {
     if (!currentResult) return;
-    const filename = type === 'output'
-        ? currentResult.output_filename
-        : currentResult.log_filename;
+
+    let filename;
+    if (type === 'output') {
+        filename = currentResult.output_filename;
+    } else if (type === 'enhanced') {
+        filename = currentResult.enhanced_filename || currentResult.output_filename;
+    } else {
+        filename = currentResult.log_filename;
+    }
     window.open('/api/download/' + encodeURIComponent(filename), '_blank');
 }
+
+// ==================== 页面初始化 ====================
+
+/**
+ * 页面加载完毕后的初始化逻辑：
+ *   1. 加载历史数据看板
+ *   2. 检查登录状态
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    loadHistoryDashboard();
+});
+

@@ -440,8 +440,7 @@ function downloadFile(type) {
 // ==================== 用户认证 ====================
 
 /**
- * 登录
- * 调用 /auth/login 接口，成功后刷新状态和历史看板
+ * 登录 —— 调用 /auth/login，成功后更新UI
  */
 async function doLogin() {
     const username = document.getElementById('loginUser').value.trim();
@@ -454,15 +453,14 @@ async function doLogin() {
         const resp = await fetch('/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ username, password }),
         });
         const result = await resp.json();
         if (result.success) {
-            document.getElementById('loginStatus').textContent = result.data.display_name;
-            document.getElementById('loginStatus').style.color = '#27ae60';
-            document.getElementById('btnClearData').style.display = 'inline-block';
+            setLoginUI(result.data.display_name);
             showToast(result.message, 'success');
-            loadHistoryDashboard();  // 刷新数据
+            loadHistoryDashboard();
         } else {
             showToast(result.message, 'error');
         }
@@ -472,18 +470,62 @@ async function doLogin() {
 }
 
 /**
- * 清空当前用户的所有数据
- * 需要登录后才能操作
+ * 登出 —— 调用 /auth/logout，恢复未登录UI
+ */
+async function doLogout() {
+    try {
+        await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (err) {}
+    setLogoutUI();
+    showToast('已安全退出', 'success');
+}
+
+/**
+ * 更新UI为已登录状态
+ */
+function setLoginUI(displayName) {
+    document.getElementById('loginStatus').textContent = displayName;
+    document.getElementById('loginStatus').style.color = '#27ae60';
+    document.getElementById('btnClearData').style.display = 'inline-block';
+    document.getElementById('btnLogout').style.display = 'inline-block';
+}
+
+/**
+ * 更新UI为未登录状态
+ */
+function setLogoutUI() {
+    document.getElementById('loginStatus').textContent = '未登录';
+    document.getElementById('loginStatus').style.color = '#ccc';
+    document.getElementById('btnClearData').style.display = 'none';
+    document.getElementById('btnLogout').style.display = 'none';
+    // 隐藏统计和图表
+    document.getElementById('statsGrid').style.display = 'none';
+    document.getElementById('chartsGrid').style.display = 'none';
+    document.getElementById('logCard').style.display = 'none';
+    document.getElementById('historySummary').style.display = 'none';
+    document.getElementById('monthlySection').style.display = 'none';
+    // 重置统计数字
+    ['statOriginal','statValid','statDup','statAnomaly','histTotalRecords','histAnomalyRate','histBatches']
+        .forEach(id => { document.getElementById(id).textContent = '0'; });
+}
+
+/**
+ * 清空当前用户的所有数据，并立即刷新UI
  */
 async function clearMyData() {
     if (!confirm('确定要清空您的所有数据吗？此操作不可恢复。')) return;
-
     try {
-        const resp = await fetch('/api/user/clear-my-data', { method: 'POST' });
+        const resp = await fetch('/api/user/clear-my-data', { method: 'POST', credentials: 'same-origin' });
         const result = await resp.json();
         if (result.success) {
+            // 隐藏本次清洗结果
+            document.getElementById('statsGrid').style.display = 'none';
+            document.getElementById('chartsGrid').style.display = 'none';
+            document.getElementById('logCard').style.display = 'none';
+            document.getElementById('historySummary').style.display = 'none';
+            document.getElementById('monthlySection').style.display = 'none';
             showToast(result.message, 'success');
-            loadHistoryDashboard();  // 刷新看板
+            loadHistoryDashboard();
         } else {
             showToast(result.message, 'error');
         }
@@ -494,18 +536,17 @@ async function clearMyData() {
 
 /**
  * 检查登录状态（页面加载时自动调用）
+ * 使用 credentials: 'same-origin' 确保发送 session cookie
  */
 async function checkLoginStatus() {
     try {
-        const resp = await fetch('/auth/status');
+        const resp = await fetch('/auth/status', { credentials: 'same-origin' });
         const result = await resp.json();
-        if (result.data && result.data.logged_in) {
-            document.getElementById('loginStatus').textContent = result.data.display_name;
-            document.getElementById('loginStatus').style.color = '#27ae60';
-            document.getElementById('btnClearData').style.display = 'inline-block';
+        if (result.success && result.data && result.data.logged_in) {
+            setLoginUI(result.data.display_name);
         }
     } catch (err) {
-        // 未登录或网络异常，保持默认状态
+        // 未登录或网络异常
     }
 }
 

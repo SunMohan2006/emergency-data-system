@@ -437,12 +437,85 @@ function downloadFile(type) {
 
 // ==================== 页面初始化 ====================
 
+// ==================== 用户认证 ====================
+
+/**
+ * 登录
+ * 调用 /auth/login 接口，成功后刷新状态和历史看板
+ */
+async function doLogin() {
+    const username = document.getElementById('loginUser').value.trim();
+    const password = document.getElementById('loginPass').value;
+    if (!username || !password) {
+        showToast('请输入用户名和密码', 'error');
+        return;
+    }
+    try {
+        const resp = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+            document.getElementById('loginStatus').textContent = result.data.display_name;
+            document.getElementById('loginStatus').style.color = '#27ae60';
+            document.getElementById('btnClearData').style.display = 'inline-block';
+            showToast(result.message, 'success');
+            loadHistoryDashboard();  // 刷新数据
+        } else {
+            showToast(result.message, 'error');
+        }
+    } catch (err) {
+        showToast('登录失败，请检查服务', 'error');
+    }
+}
+
+/**
+ * 清空当前用户的所有数据
+ * 需要登录后才能操作
+ */
+async function clearMyData() {
+    if (!confirm('确定要清空您的所有数据吗？此操作不可恢复。')) return;
+
+    try {
+        const resp = await fetch('/api/user/clear-my-data', { method: 'POST' });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(result.message, 'success');
+            loadHistoryDashboard();  // 刷新看板
+        } else {
+            showToast(result.message, 'error');
+        }
+    } catch (err) {
+        showToast('清空失败，请检查服务', 'error');
+    }
+}
+
+/**
+ * 检查登录状态（页面加载时自动调用）
+ */
+async function checkLoginStatus() {
+    try {
+        const resp = await fetch('/auth/status');
+        const result = await resp.json();
+        if (result.data && result.data.logged_in) {
+            document.getElementById('loginStatus').textContent = result.data.display_name;
+            document.getElementById('loginStatus').style.color = '#27ae60';
+            document.getElementById('btnClearData').style.display = 'inline-block';
+        }
+    } catch (err) {
+        // 未登录或网络异常，保持默认状态
+    }
+}
+
 /**
  * 页面加载完毕后的初始化逻辑：
- *   1. 加载历史数据看板
- *   2. 检查登录状态
+ *   1. 检查登录状态
+ *   2. 加载历史数据看板
  */
 document.addEventListener('DOMContentLoaded', function() {
+    checkLoginStatus();
     loadHistoryDashboard();
 });
 

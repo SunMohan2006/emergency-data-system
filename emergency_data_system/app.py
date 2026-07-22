@@ -20,7 +20,7 @@ import os
 import uuid
 from datetime import datetime
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, session
 
 from config import (
     UPLOAD_FOLDER,
@@ -141,6 +141,10 @@ def upload_and_clean():
 
     # ---- 持久化到数据库 ----
     try:
+        # 绑定当前登录用户（未登录则使用 'anonymous'）
+        user = session.get('user', {})
+        current_user_id = user.get('username', 'anonymous')
+
         clean_records = []
         for _, row in pd.read_excel(result['output_path']).iterrows():
             clean_records.append({
@@ -153,8 +157,8 @@ def upload_and_clean():
                 'source_file': file.filename,
                 'is_anomaly': str(row.get('企业名称', '')) == '待补充' or str(row.get('联系电话', '')) == '待补充',
             })
-        CleanRecord.save_batch(clean_records)
-        AnomalyRecord.save_batch(result['anomaly_logs'], batch_id)
+        CleanRecord.save_batch(clean_records, user_id=current_user_id)
+        AnomalyRecord.save_batch(result['anomaly_logs'], batch_id, user_id=current_user_id)
     except Exception:
         pass  # 数据库写入失败不影响主流程
 
@@ -197,9 +201,10 @@ def download_file(filename: str):
 
 @app.route('/api/stats')
 def get_stats():
-    """获取全局数据统计（用于可视化大屏）"""
+    """获取当前用户的数据统计"""
     try:
-        db_stats = CleanRecord.get_stats()
+        user = session.get('user', {})
+        db_stats = CleanRecord.get_stats(user_id=user.get('username'))
         return jsonify({'success': True, 'data': db_stats})
     except Exception:
         return jsonify({'success': True, 'data': {
@@ -210,9 +215,10 @@ def get_stats():
 
 @app.route('/api/history')
 def get_history():
-    """获取历史清洗记录列表（最近20个批次）"""
+    """获取当前用户的历史清洗记录（最近20个批次）"""
     try:
-        records = CleanRecord.query_all(limit=200)
+        user = session.get('user', {})
+        records = CleanRecord.query_all(user_id=user.get('username'), limit=200)
 
         # 按批次号聚合
         batches = {}
@@ -243,12 +249,35 @@ def get_history():
 
 @app.route('/api/monthly')
 def get_monthly():
-    """获取月度数据统计"""
+    """获取当前用户的月度数据统计"""
     try:
-        monthly = CleanRecord.get_monthly_stats()
+        user = session.get('user', {})
+        monthly = CleanRecord.get_monthly_stats(user_id=user.get('username'))
         return jsonify({'success': True, 'data': monthly})
     except Exception:
         return jsonify({'success': True, 'data': []})
+
+
+# ==================== 用户数据管理 API ====================
+
+@app.route('/api/user/clear-my-data', methods=['POST'])
+@login_required
+def clear_my_data():
+    """清空当前用户的所有数据"""
+    user = session.get('user', {})
+    user_id = user.get('username', '')
+
+    if not user_id:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    try:
+        count = CleanRecord.delete_all_by_user(user_id)
+        return jsonify({
+            'success': True,
+            'message': f'已清空 {count} 条数据记录',
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/health')

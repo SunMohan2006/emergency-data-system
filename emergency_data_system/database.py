@@ -87,6 +87,7 @@ class CleanRecord(Base):
     __tablename__ = 'clean_records'
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment='自增主键')
+    user_id = Column(String(64), nullable=False, default='system', index=True, comment='所属用户（与auth模块的用户名对应）')
     batch_id = Column(String(32), nullable=False, index=True, comment='批次号（清洗任务唯一标识）')
     company_name = Column(String(200), nullable=False, index=True, comment='企业名称（标准化后）')
     phone = Column(String(20), nullable=True, comment='联系电话（校验清洗后）')
@@ -101,6 +102,7 @@ class CleanRecord(Base):
         """将记录序列化为字典，方便 JSON 序列化"""
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'batch_id': self.batch_id,
             'company_name': self.company_name,
             'phone': self.phone,
@@ -115,12 +117,13 @@ class CleanRecord(Base):
     # ---------- 写入操作 ----------
 
     @staticmethod
-    def save_batch(records: List[Dict[str, Any]]) -> int:
+    def save_batch(records: List[Dict[str, Any]], user_id: str = 'system') -> int:
         """
         批量保存清洗记录
 
         参数:
             records: 字典列表，每个字典对应一行清洗后的数据
+            user_id: 所属用户的用户名
 
         返回:
             成功保存的记录数
@@ -130,6 +133,7 @@ class CleanRecord(Base):
         try:
             for rec in records:
                 record = CleanRecord(
+                    user_id=user_id,
                     batch_id=rec.get('batch_id', ''),
                     company_name=rec.get('company_name', rec.get('企业名称', '')),
                     phone=rec.get('phone', rec.get('联系电话', '')),
@@ -157,16 +161,14 @@ class CleanRecord(Base):
     # ---------- 查询操作 ----------
 
     @staticmethod
-    def query_all(limit: int = 500) -> List[Dict[str, Any]]:
-        """查询最新记录（按入库时间倒序）"""
+    def query_all(user_id: str = None, limit: int = 500) -> List[Dict[str, Any]]:
+        """查询最新记录（按入库时间倒序），可按用户过滤"""
         session = DBSession()
         try:
-            rows = (
-                session.query(CleanRecord)
-                .order_by(CleanRecord.created_at.desc())
-                .limit(limit)
-                .all()
-            )
+            q = session.query(CleanRecord)
+            if user_id:
+                q = q.filter(CleanRecord.user_id == user_id)
+            rows = q.order_by(CleanRecord.created_at.desc()).limit(limit).all()
             return [r.to_dict() for r in rows]
         finally:
             session.close()
@@ -221,20 +223,16 @@ class CleanRecord(Base):
     # ---------- 统计操作 ----------
 
     @staticmethod
-    def get_stats() -> Dict[str, Any]:
-        """获取全局统计概览"""
+    def get_stats(user_id: str = None) -> Dict[str, Any]:
+        """获取统计概览，可按用户过滤"""
         session = DBSession()
         try:
-            total = session.query(func.count(CleanRecord.id)).scalar() or 0
-            anomaly_count = (
-                session.query(func.count(CleanRecord.id))
-                .filter(CleanRecord.is_anomaly == True)
-                .scalar() or 0
-            )
-            batch_count = (
-                session.query(func.count(func.distinct(CleanRecord.batch_id)))
-                .scalar() or 0
-            )
+            base_q = session.query(CleanRecord)
+            if user_id:
+                base_q = base_q.filter(CleanRecord.user_id == user_id)
+            total = base_q.with_entities(func.count(CleanRecord.id)).scalar() or 0
+            anomaly_count = base_q.filter(CleanRecord.is_anomaly == True).with_entities(func.count(CleanRecord.id)).scalar() or 0
+            batch_count = base_q.with_entities(func.count(func.distinct(CleanRecord.batch_id))).scalar() or 0
             return {
                 'total_records': total,
                 'anomaly_records': anomaly_count,
@@ -245,12 +243,14 @@ class CleanRecord(Base):
             session.close()
 
     @staticmethod
-    def get_monthly_stats() -> List[Dict[str, Any]]:
-        """按月统计清洗数据量"""
+    def get_monthly_stats(user_id: str = None) -> List[Dict[str, Any]]:
+        """按月统计清洗数据量，可按用户过滤"""
         session = DBSession()
         try:
-            # SQLite 和 MySQL 的日期截取语法不同，此处用 Python 层处理
-            rows = session.query(CleanRecord.check_date).all()
+            q = session.query(CleanRecord.check_date)
+            if user_id:
+                q = q.filter(CleanRecord.user_id == user_id)
+            rows = q.all()
             monthly = {}
             for (date_str,) in rows:
                 if date_str and len(date_str) >= 7:
@@ -266,20 +266,42 @@ class CleanRecord(Base):
     # ---------- 清理操作 ----------
 
     @staticmethod
-    def delete_by_batch(batch_id: str) -> int:
-        """删除指定批次的全部记录"""
+    def delete_by_batch(batch_id: str, user_id: str = None) -> int:
+        """删除指定批次（须同属一个用户）"""
         session = DBSession()
         try:
-            count = (
-                session.query(CleanRecord)
-                .filter(CleanRecord.batch_id == batch_id)
-                .delete()
-            )
+            q = session.query(CleanRecord).filter(CleanRecord.batch_id == batch_id)
+            if user_id:
+                q = q.filter(CleanRecord.user_id == user_id)
+            count = q.delete()
             session.commit()
             return count
         except Exception as e:
             session.rollback()
             raise RuntimeError(f'删除失败: {e}') from e
+        finally:
+            session.close()
+
+    @staticmethod
+    def delete_all_by_user(user_id: str) -> int:
+        """清空指定用户的所有清洗记录和异常日志"""
+        session = DBSession()
+        try:
+            clean_count = (
+                session.query(CleanRecord)
+                .filter(CleanRecord.user_id == user_id)
+                .delete()
+            )
+            log_count = (
+                session.query(AnomalyRecord)
+                .filter(AnomalyRecord.user_id == user_id)
+                .delete()
+            )
+            session.commit()
+            return clean_count + log_count
+        except Exception as e:
+            session.rollback()
+            raise RuntimeError(f'清空失败: {e}') from e
         finally:
             session.close()
 
@@ -293,6 +315,7 @@ class AnomalyRecord(Base):
     __tablename__ = 'anomaly_records'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(64), nullable=False, default='system', index=True, comment='所属用户')
     batch_id = Column(String(32), nullable=False, index=True, comment='关联的批次号')
     excel_row = Column(Integer, nullable=True, comment='Excel 原始行号')
     field_name = Column(String(50), nullable=True, comment='异常字段名')
@@ -314,13 +337,14 @@ class AnomalyRecord(Base):
         }
 
     @staticmethod
-    def save_batch(logs: List[Dict[str, str]], batch_id: str) -> int:
+    def save_batch(logs: List[Dict[str, str]], batch_id: str, user_id: str = 'system') -> int:
         """批量保存异常日志"""
         session = DBSession()
         count = 0
         try:
             for log in logs:
                 record = AnomalyRecord(
+                    user_id=user_id,
                     batch_id=batch_id,
                     excel_row=int(log.get('行号', 0)) if log.get('行号') else None,
                     field_name=log.get('字段', ''),

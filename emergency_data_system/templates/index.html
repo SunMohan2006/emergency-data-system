@@ -14,9 +14,15 @@
 <!-- 顶部 -->
 <div class="header">
     <span class="logo">&#128737;</span>
-    <div>
+    <div style="flex:1;">
         <h1>应急数据清洗与可视化系统</h1>
         <div class="subtitle">应急管理局 · 安全生产数据治理平台</div>
+    </div>
+    <div id="loginBar" style="display:flex;align-items:center;gap:8px;">
+        <input type="text" id="loginUser" placeholder="用户名" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;" value="admin">
+        <input type="password" id="loginPass" placeholder="密码" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;" value="admin123">
+        <button onclick="doLogin()" style="padding:4px 12px;border-radius:4px;border:none;background:#27ae60;color:#fff;cursor:pointer;font-size:12px;">登录</button>
+        <span id="loginStatus" style="font-size:12px;color:#ccc;">未登录</span>
     </div>
 </div>
 
@@ -48,6 +54,10 @@
             </button>
             <button class="btn btn-success" id="btnDownloadEnhanced" disabled onclick="downloadFile('enhanced')">
                 &#128203; 下载完整报表
+            </button>
+            <span style="flex:1;"></span>
+            <button class="btn btn-outline" id="btnClearData" style="color:#e74c3c;border-color:#e74c3c;display:none;" onclick="clearMyData()">
+                &#128465; 清空我的数据
             </button>
         </div>
     </div>

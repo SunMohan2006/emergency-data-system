@@ -709,6 +709,17 @@ def clean_data(file_path: str) -> Dict[str, Any]:
     # ---- 保存异常日志 ----
     log_path = save_anomaly_logs(logs)
 
+    # ---- 计算应急专属列分布 ----
+    column_stats = {}
+    emergency_cols = ['排查类型', '隐患等级', '排查日期']
+    for col in emergency_cols:
+        if col in output_df.columns:
+            value_counts = output_df[col].value_counts().to_dict()
+            # 排除"待补充"的统计
+            value_counts = {k: int(v) for k, v in value_counts.items() if k != FILL_VALUE}
+            if value_counts:
+                column_stats[col] = value_counts
+
     # ---- 返回统计信息 ----
     return {
         'original_count': original_count,
@@ -719,6 +730,7 @@ def clean_data(file_path: str) -> Dict[str, Any]:
         'log_path': log_path,
         'columns': list(output_df.columns),
         'anomaly_logs': logs,
+        'column_stats': column_stats,
     }
 
 

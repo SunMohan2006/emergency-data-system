@@ -141,6 +141,14 @@ function renderAll(data) {
     renderOverviewChart(data);
     renderAnomalyPieChart(data);
 
+    // 应急专属图表：排查类型分布 + 隐患等级分布
+    if (data.columns && data.columns.includes('排查类型')) {
+        renderCheckTypeChart(data);
+    }
+    if (data.columns && data.columns.includes('隐患等级')) {
+        renderRiskLevelChart(data);
+    }
+
     // 显示日志
     document.getElementById('logCard').style.display = 'block';
     renderLogTable(data.anomaly_logs);
@@ -436,6 +444,85 @@ function downloadFile(type) {
 }
 
 // ==================== 页面初始化 ====================
+
+// ==================== 应急专属图表 ====================
+
+/**
+ * 排查类型分布 —— 柱状图
+ * 展示安全生产检查、消防检查、隐患排查等各类型的数据量分布
+ */
+function renderCheckTypeChart(data) {
+    const stats = data.column_stats || {};
+    const checkTypeData = stats['排查类型'] || {};
+    if (Object.keys(checkTypeData).length === 0) return;
+
+    const box = document.getElementById('boxCheckType');
+    const dom = document.getElementById('chartCheckType');
+    box.style.display = 'block';
+    if (window._checkTypeChart) window._checkTypeChart.dispose();
+    const chart = echarts.init(dom);
+    window._checkTypeChart = chart;
+
+    const names = Object.keys(checkTypeData);
+    const values = Object.values(checkTypeData);
+    const colors = ['#C41E3A', '#E74C3C', '#F39C12', '#2D6AA0', '#27AE60'];
+
+    chart.setOption({
+        tooltip: { trigger: 'axis', formatter: '{b}: {c} 条' },
+        grid: { left: 80, right: 20, top: 10, bottom: 40 },
+        xAxis: {
+            type: 'category',
+            data: names,
+            axisLabel: { fontSize: 11, rotate: names.length > 3 ? 25 : 0 },
+        },
+        yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 11 } },
+        series: [{
+            type: 'bar',
+            data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i % colors.length] } })),
+            barWidth: '50%',
+            label: { show: true, position: 'top', fontSize: 13, fontWeight: 'bold' },
+        }],
+    });
+    window.addEventListener('resize', () => chart.resize());
+}
+
+/**
+ * 隐患等级构成 —— 饼图（环形）
+ * 展示一般隐患、较大隐患、重大隐患的占比构成
+ */
+function renderRiskLevelChart(data) {
+    const stats = data.column_stats || {};
+    const riskData = stats['隐患等级'] || {};
+    if (Object.keys(riskData).length === 0) return;
+
+    const box = document.getElementById('boxRiskLevel');
+    const dom = document.getElementById('chartRiskLevel');
+    box.style.display = 'block';
+    if (window._riskLevelChart) window._riskLevelChart.dispose();
+    const chart = echarts.init(dom);
+    window._riskLevelChart = chart;
+
+    const pieData = Object.entries(riskData).map(([name, value]) => {
+        let color = '#F39C12';  // 一般
+        if (name.includes('重大')) color = '#C41E3A';
+        else if (name.includes('较大')) color = '#E74C3C';
+        return { name, value, itemStyle: { color } };
+    });
+
+    chart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} 条 ({d}%)' },
+        legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 11 } },
+        series: [{
+            type: 'pie',
+            radius: ['50%', '75%'],
+            center: ['40%', '50%'],
+            data: pieData,
+            label: { fontSize: 11, formatter: '{b}\n{d}%' },
+            emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } },
+        }],
+    });
+    window.addEventListener('resize', () => chart.resize());
+}
 
 // ==================== 用户认证 ====================
 

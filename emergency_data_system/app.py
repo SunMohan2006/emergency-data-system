@@ -178,6 +178,7 @@ def upload_and_clean():
             'enhanced_filename': enhanced_output_filename,
             'batch_id': batch_id,
             'anomaly_logs': result['anomaly_logs'],
+            'column_stats': result.get('column_stats', {}),
         }
     })
 

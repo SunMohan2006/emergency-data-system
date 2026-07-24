@@ -21,9 +21,17 @@
     <div id="loginBar" style="display:flex;align-items:center;gap:8px;">
         <input type="text" id="loginUser" placeholder="用户名" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;" value="admin">
         <input type="password" id="loginPass" placeholder="密码" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;" value="admin123">
-        <button onclick="doLogin()" style="padding:4px 12px;border-radius:4px;border:none;background:#27ae60;color:#fff;cursor:pointer;font-size:12px;">登录</button>
+        <button onclick="doLogin()" id="btnLogin" style="padding:4px 12px;border-radius:4px;border:none;background:#27ae60;color:#fff;cursor:pointer;font-size:12px;">登录</button>
         <button onclick="doLogout()" id="btnLogout" style="padding:4px 12px;border-radius:4px;border:none;background:#e74c3c;color:#fff;cursor:pointer;font-size:12px;display:none;">登出</button>
+        <button onclick="toggleRegister()" id="btnShowRegister" style="padding:4px 8px;border-radius:4px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer;font-size:11px;">注册</button>
         <span id="loginStatus" style="font-size:12px;color:#ccc;">未登录</span>
+    </div>
+    <div id="registerBar" style="display:none;align-items:center;gap:8px;margin-top:4px;">
+        <input type="text" id="regUser" placeholder="新用户名" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;">
+        <input type="password" id="regPass" placeholder="密码" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;">
+        <input type="password" id="regPass2" placeholder="确认密码" style="padding:4px 8px;border-radius:4px;border:none;width:80px;font-size:12px;">
+        <button onclick="doRegister()" style="padding:4px 12px;border-radius:4px;border:none;background:#f39c12;color:#fff;cursor:pointer;font-size:12px;">确认注册</button>
+        <button onclick="toggleRegister()" style="padding:4px 8px;border-radius:4px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer;font-size:11px;">取消</button>
     </div>
 </div>
 

@@ -440,6 +440,64 @@ function downloadFile(type) {
 // ==================== 用户认证 ====================
 
 /**
+ * 切换登录/注册表单
+ */
+function toggleRegister() {
+    const bar = document.getElementById('registerBar');
+    const loginBar = document.getElementById('loginBar');
+    const btnShow = document.getElementById('btnShowRegister');
+    if (bar.style.display === 'none' || !bar.style.display) {
+        bar.style.display = 'flex';
+        loginBar.style.display = 'none';
+        btnShow.style.display = 'none';
+    } else {
+        bar.style.display = 'none';
+        loginBar.style.display = 'flex';
+        btnShow.style.display = 'inline-block';
+    }
+}
+
+/**
+ * 注册新用户
+ */
+async function doRegister() {
+    const username = document.getElementById('regUser').value.trim();
+    const password = document.getElementById('regPass').value;
+    const password2 = document.getElementById('regPass2').value;
+
+    if (!username || username.length < 2) {
+        showToast('用户名至少2个字符', 'error'); return;
+    }
+    if (!password || password.length < 6) {
+        showToast('密码至少6个字符', 'error'); return;
+    }
+    if (password !== password2) {
+        showToast('两次密码不一致', 'error'); return;
+    }
+
+    try {
+        const resp = await fetch('/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ username, password, role: 'operator', display_name: username }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast('注册成功！请用新账号登录', 'success');
+            document.getElementById('regUser').value = '';
+            document.getElementById('regPass').value = '';
+            document.getElementById('regPass2').value = '';
+            toggleRegister();  // 切回登录界面
+        } else {
+            showToast(result.message, 'error');
+        }
+    } catch (err) {
+        showToast('注册失败，请检查服务', 'error');
+    }
+}
+
+/**
  * 登录 —— 调用 /auth/login，成功后更新UI
  */
 async function doLogin() {

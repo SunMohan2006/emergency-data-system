@@ -164,10 +164,10 @@ def register():
         role: 角色（operator/admin，默认为 operator）
         display_name: 显示名称
     """
-    # 检查当前用户是否是管理员
-    current_user = session.get('user', {})
-    if current_user.get('role') != 'admin':
-        return jsonify({'success': False, 'message': '仅管理员可创建新用户'}), 403
+    # 注册对所有人开放（如需限制，取消下面注释）
+    # current_user = session.get('user', {})
+    # if current_user.get('role') != 'admin':
+    #     return jsonify({'success': False, 'message': '仅管理员可创建新用户'}), 403
 
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()

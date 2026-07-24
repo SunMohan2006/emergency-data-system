@@ -69,6 +69,7 @@ def index():
 # ==================== 核心 API ====================
 
 @app.route('/api/upload', methods=['POST'])
+@login_required
 def upload_and_clean():
     """
     上传 Excel 文件并执行全流程智能清洗
@@ -182,6 +183,7 @@ def upload_and_clean():
 
 
 @app.route('/api/download/<filename>')
+@login_required
 def download_file(filename: str):
     """
     下载文件（清洗结果 / 异常日志 / 增强报表）
@@ -200,6 +202,7 @@ def download_file(filename: str):
 # ==================== 数据统计 API ====================
 
 @app.route('/api/stats')
+@login_required
 def get_stats():
     """获取当前用户的数据统计"""
     try:
@@ -214,6 +217,7 @@ def get_stats():
 
 
 @app.route('/api/history')
+@login_required
 def get_history():
     """获取当前用户的历史清洗记录（最近20个批次）"""
     try:
@@ -248,6 +252,7 @@ def get_history():
 
 
 @app.route('/api/monthly')
+@login_required
 def get_monthly():
     """获取当前用户的月度数据统计"""
     try:

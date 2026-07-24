@@ -40,11 +40,12 @@
             <div class="upload-text">点击上传 Excel 文件 或拖拽文件到此处</div>
             <div class="upload-hint">支持 .xlsx 格式，最大 10MB</div>
         </div>
-        <input type="file" id="fileInput" accept=".xlsx" onchange="handleFileSelect(event)">
-        <div class="file-name" id="fileName"></div>
-        <div class="progress-bar" id="progressBar"><div class="fill"></div></div>
-        <div class="btn-row">
-            <button class="btn btn-primary" id="btnUpload" disabled onclick="uploadAndClean()">
+        <div id="uploadArea">
+            <input type="file" id="fileInput" accept=".xlsx" onchange="handleFileSelect(event)">
+            <div class="file-name" id="fileName"></div>
+            <div class="progress-bar" id="progressBar"><div class="fill"></div></div>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btnUpload" disabled onclick="uploadAndClean()">
                 &#9881; 一键智能清洗
             </button>
             <button class="btn btn-outline" id="btnDownloadClean" disabled onclick="downloadFile('output')">
@@ -60,6 +61,10 @@
             <button class="btn btn-outline" id="btnClearData" style="color:#e74c3c;border-color:#e74c3c;display:none;" onclick="clearMyData()">
                 &#128465; 清空我的数据
             </button>
+        </div>
+        </div><!-- end #uploadArea -->
+        <div id="loginPrompt" style="text-align:center;padding:30px;color:#999;display:none;">
+            &#128274; 请先在右上角登录后再使用系统
         </div>
     </div>
 

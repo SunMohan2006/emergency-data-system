@@ -488,6 +488,9 @@ function setLoginUI(displayName) {
     document.getElementById('loginStatus').style.color = '#27ae60';
     document.getElementById('btnClearData').style.display = 'inline-block';
     document.getElementById('btnLogout').style.display = 'inline-block';
+    // 显示上传区，隐藏登录提示
+    document.getElementById('uploadArea').style.display = 'block';
+    document.getElementById('loginPrompt').style.display = 'none';
 }
 
 /**
@@ -498,6 +501,9 @@ function setLogoutUI() {
     document.getElementById('loginStatus').style.color = '#ccc';
     document.getElementById('btnClearData').style.display = 'none';
     document.getElementById('btnLogout').style.display = 'none';
+    // 隐藏上传区，显示登录提示
+    document.getElementById('uploadArea').style.display = 'none';
+    document.getElementById('loginPrompt').style.display = 'block';
     // 隐藏统计和图表
     document.getElementById('statsGrid').style.display = 'none';
     document.getElementById('chartsGrid').style.display = 'none';
@@ -544,9 +550,11 @@ async function checkLoginStatus() {
         const result = await resp.json();
         if (result.success && result.data && result.data.logged_in) {
             setLoginUI(result.data.display_name);
+        } else {
+            setLogoutUI();
         }
     } catch (err) {
-        // 未登录或网络异常
+        setLogoutUI();
     }
 }
 

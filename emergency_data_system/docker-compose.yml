@@ -1,0 +1,29 @@
+# ============================================================================
+#  应急数据清洗与可视化系统 — Docker Compose 编排
+# ============================================================================
+#  启动: docker-compose up -d
+#  停止: docker-compose down
+#  查看日志: docker-compose logs -f
+# ============================================================================
+
+version: "3.8"
+
+services:
+  app:
+    build: .
+    container_name: emergency-data-system
+    ports:
+      - "5000:5000"
+    volumes:
+      # 持久化上传文件、输出、日志（容器删除后数据不丢失）
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      # 持久化数据库
+      - ./emergency_data.db:/app/emergency_data.db
+      # 持久化用户数据
+      - ./users.json:/app/users.json
+    environment:
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-emergency-data-system-production-key}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///app/emergency_data.db}
+    restart: unless-stopped

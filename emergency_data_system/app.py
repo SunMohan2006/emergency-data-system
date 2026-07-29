@@ -136,8 +136,9 @@ def upload_and_clean():
             enhanced_output_path,
             file.filename,
         )
-    except Exception:
-        # 增强报表生成失败不影响主流程
+    except Exception as e:
+        import sys
+        print(f'[Report] 增强报表生成失败: {e}', file=sys.stderr)
         enhanced_output_filename = result['output_filename']
 
     # ---- 持久化到数据库 ----
@@ -160,8 +161,9 @@ def upload_and_clean():
             })
         CleanRecord.save_batch(clean_records, user_id=current_user_id)
         AnomalyRecord.save_batch(result['anomaly_logs'], batch_id, user_id=current_user_id)
-    except Exception:
-        pass  # 数据库写入失败不影响主流程
+    except Exception as e:
+        import sys
+        print(f'[DB] 写入失败: {e}', file=sys.stderr)
 
     # ---- 返回 ----
     return jsonify({
@@ -210,7 +212,9 @@ def get_stats():
         user = session.get('user', {})
         db_stats = CleanRecord.get_stats(user_id=user.get('username'))
         return jsonify({'success': True, 'data': db_stats})
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f'[API] /stats 查询失败: {e}', file=sys.stderr)
         return jsonify({'success': True, 'data': {
             'total_records': 0, 'anomaly_records': 0,
             'total_batches': 0, 'anomaly_rate': '0%',
@@ -248,7 +252,9 @@ def get_history():
         )[:20]
 
         return jsonify({'success': True, 'data': batch_list})
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f'[API] /history 查询失败: {e}', file=sys.stderr)
         return jsonify({'success': True, 'data': []})
 
 
@@ -260,7 +266,9 @@ def get_monthly():
         user = session.get('user', {})
         monthly = CleanRecord.get_monthly_stats(user_id=user.get('username'))
         return jsonify({'success': True, 'data': monthly})
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f'[API] /monthly 查询失败: {e}', file=sys.stderr)
         return jsonify({'success': True, 'data': []})
 
 

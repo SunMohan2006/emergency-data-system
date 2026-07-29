@@ -1,0 +1,35 @@
+name: 测试
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: |
+          cd emergency_data_system
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: 生成测试数据
+        run: |
+          cd emergency_data_system
+          python create_test_data.py
+
+      - name: 运行清洗引擎测试
+        run: |
+          cd emergency_data_system
+          python -m pytest tests/test_cleaner.py -v --tb=short

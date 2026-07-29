@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# 运行时数据（由 volumes 挂载）
+uploads/*
+outputs/*
+logs/*
+*.db
+users.json
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# 测试临时文件
+_test_*
+_verify_*
+
+# 文档
+*.md
+!requirements.txt

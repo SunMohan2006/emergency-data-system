@@ -10,6 +10,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: emergency_data_system
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,17 +23,10 @@ jobs:
           python-version: '3.11'
 
       - name: 安装依赖
-        run: |
-          cd emergency_data_system
-          pip install -r requirements.txt
-          pip install pytest
+        run: pip install -r requirements.txt
 
       - name: 生成测试数据
-        run: |
-          cd emergency_data_system
-          python create_test_data.py
+        run: python create_test_data.py
 
       - name: 运行清洗引擎测试
-        run: |
-          cd emergency_data_system
-          python -m pytest tests/test_cleaner.py -v --tb=short
+        run: python -m pytest tests/test_cleaner.py -v

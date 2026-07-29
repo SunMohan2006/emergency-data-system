@@ -1,8 +1,7 @@
 """pytest 共享 fixtures"""
 
-import os, sys, subprocess, time
+import os, sys
 import pytest
-import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -16,6 +15,7 @@ def base_url():
 @pytest.fixture(scope='session')
 def admin_session(base_url):
     """已登录 admin 的 requests Session"""
+    import requests  # 延迟导入，避免 CI 上无 Flask 时加载失败
     s = requests.Session()
     r = s.post(f'{base_url}/auth/login',
                json={'username': 'admin', 'password': 'admin123'})
